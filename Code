@@ -1,0 +1,124 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Servo.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+
+Adafruit_SSD1306 display(
+  SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET
+);
+
+const int noiseButton = 2;
+const int resetButton = 3;
+
+const int greenLED = 5;
+const int yellowLED = 6;
+const int redLED = 7;
+
+const int buzzer = 8;
+const int servoPin = 9;
+
+Servo statusServo;
+
+int noiseLevel = 0;
+
+bool lastNoiseButton = HIGH;
+bool lastResetButton = HIGH;
+
+void setup() {
+  pinMode(noiseButton, INPUT_PULLUP);
+  pinMode(resetButton, INPUT_PULLUP);
+
+  pinMode(greenLED, OUTPUT);
+  pinMode(yellowLED, OUTPUT);
+  pinMode(redLED, OUTPUT);
+  pinMode(buzzer, OUTPUT);
+
+  statusServo.attach(servoPin);
+
+  Serial.begin(9600);
+
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    while (true) {}
+  }
+
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+
+  updateStatus();
+}
+
+void loop() {
+  bool noiseReading = digitalRead(noiseButton);
+  bool resetReading = digitalRead(resetButton);
+  if (lastNoiseButton == HIGH && noiseReading == LOW) {
+    if (noiseLevel < 2) {
+      noiseLevel++;
+    }
+
+    updateStatus();
+    delay(200);
+  }
+
+  if (lastResetButton == HIGH && resetReading == LOW) {
+    noiseLevel = 0;
+    updateStatus();
+    delay(200);
+  }
+
+  lastNoiseButton = noiseReading;
+  lastResetButton = resetReading;
+}
+
+void updateStatus() {
+  digitalWrite(greenLED, LOW);
+  digitalWrite(yellowLED, LOW);
+  digitalWrite(redLED, LOW);
+  noTone(buzzer);
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(10, 5);
+  display.println("CLASSROOM MONITOR");
+
+  display.drawLine(0, 17, 127, 17, SSD1306_WHITE);
+
+  if (noiseLevel == 0) {
+    display.setTextSize(2);
+    display.setCursor(15, 27);
+    display.println("QUIET");
+
+    digitalWrite(greenLED, HIGH);
+    statusServo.write(20);
+  }
+  else if (noiseLevel == 1) {
+    display.setTextSize(2);
+    display.setCursor(5, 27);
+    display.println("MODERATE");
+
+    digitalWrite(yellowLED, HIGH);
+    statusServo.write(90);
+  }
+  else {
+    display.setTextSize(2);
+    display.setCursor(5, 27);
+    display.println("TOO NOISY!");
+
+    digitalWrite(redLED, HIGH);
+    statusServo.write(160);
+
+    tone(buzzer, 1000, 500);
+  }
+
+  display.setTextSize(1);
+  display.setCursor(5, 53);
+  display.println("Press RESET to clear");
+
+  display.display();
+
+  Serial.print("Noise level: ");
+  Serial.println(noiseLevel);
+}
